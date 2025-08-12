@@ -31,9 +31,19 @@ export enum TelegramEventTypes {
   WORLD_CONNECTED = 'TELEGRAM_WORLD_CONNECTED',
   WORLD_LEFT = 'TELEGRAM_WORLD_LEFT',
 
-  // /start event
-  SLASH_START = 'TELEGRAM_SLASH_START',
-
+export interface TelegramEventPayloadMap {
+  [TelegramEventTypes.MESSAGE_RECEIVED]: TelegramMessageReceivedPayload;
+  [TelegramEventTypes.MESSAGE_SENT]: TelegramMessageSentPayload;
+  [TelegramEventTypes.REACTION_RECEIVED]: TelegramReactionReceivedPayload;
+  [TelegramEventTypes.WORLD_JOINED]: TelegramWorldPayload;
+  [TelegramEventTypes.WORLD_CONNECTED]: TelegramWorldPayload;
+  [TelegramEventTypes.WORLD_LEFT]: TelegramWorldPayload;
+  [TelegramEventTypes.SLASH_START]: { ctx: Context };
+  [TelegramEventTypes.ENTITY_JOINED]: TelegramEntityPayload;
+  [TelegramEventTypes.ENTITY_LEFT]: TelegramEntityPayload;
+  [TelegramEventTypes.ENTITY_UPDATED]: TelegramEntityPayload;
+  [TelegramEventTypes.INTERACTION_RECEIVED]: TelegramReactionReceivedPayload;
+}
   // Entity events
   ENTITY_JOINED = 'TELEGRAM_ENTITY_JOINED',
   ENTITY_LEFT = 'TELEGRAM_ENTITY_LEFT',

@@ -14,7 +14,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { type Context, Telegraf } from 'telegraf';
-import { type ChatMemberOwner, type ChatMemberAdministrator } from 'telegraf/types';
+import { type ChatMemberOwner, type ChatMemberAdministrator, type User } from 'telegraf/types';
 import { TELEGRAM_SERVICE_NAME } from './constants';
 import { validateTelegramConfig } from './environment';
 import { MessageManager } from './messageManager';
@@ -144,7 +144,6 @@ export class TelegramService extends Service {
     this.bot.start(ctx => {
       this.runtime.emitEvent([TelegramEventTypes.SLASH_START], {
         // we don't need this
-        //runtime: this.runtime,
         ctx,
       });
     });
@@ -481,7 +480,7 @@ export class TelegramService extends Service {
   /**
    * Builds entity for message sender
    */
-  private buildMsgSenderEntity(from: any): Entity | null {
+  private buildMsgSenderEntity(from: User): Entity | null {
     if (!from) return null;
 
     const userId = createUniqueUuid(this.runtime, from.id.toString()) as UUID;
@@ -683,12 +682,20 @@ export class TelegramService extends Service {
         entityBatch.map(async (entity: Entity) => {
           try {
             if (entity.id) {
+              const telegramMetadata = entity.metadata?.telegram as
+                | {
+                    username?: string;
+                    name?: string;
+                    id?: string;
+                  }
+                | undefined;
+
               await this.runtime.ensureConnection({
                 entityId: entity.id,
                 roomId: roomId,
-                userName: entity.metadata?.telegram?.username,
-                name: entity.metadata?.telegram?.name,
-                userId: entity.metadata?.telegram?.id,
+                userName: telegramMetadata?.username,
+                name: telegramMetadata?.name,
+                userId: telegramMetadata?.id as UUID,
                 source: 'telegram',
                 channelId: channelId,
                 serverId: serverId,
@@ -701,7 +708,12 @@ export class TelegramService extends Service {
               );
             }
           } catch (err) {
-            logger.warn(`Failed to sync user ${entity.metadata?.telegram?.username}: ${err}`);
+            const telegramMetadata = entity.metadata?.telegram as
+              | {
+                  username?: string;
+                }
+              | undefined;
+            logger.warn(`Failed to sync user ${telegramMetadata?.username}: ${err}`);
           }
         })
       );

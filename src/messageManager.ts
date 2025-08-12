@@ -402,7 +402,7 @@ export class MessageManager {
           const memories: Memory[] = [];
           for (let i = 0; i < sentMessages.length; i++) {
             const sentMessage = sentMessages[i];
-            //const _isLastMessage = i === sentMessages.length - 1;
+            
 
             const responseMemory: Memory = {
               id: createUniqueUuid(this.runtime, sentMessage.message_id.toString()),

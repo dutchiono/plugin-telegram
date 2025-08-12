@@ -4,7 +4,7 @@ import type { Telegraf } from 'telegraf';
 import type { Context } from 'telegraf';
 import type { MessageManager } from './messageManager';
 import type { TelegramService } from './service';
-import type { TelegramContent, } from './types';
+import type { TelegramContent } from './types';
 
 
 const TEST_IMAGE_URL =
