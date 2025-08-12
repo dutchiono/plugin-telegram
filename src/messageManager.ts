@@ -84,7 +84,7 @@ export class MessageManager {
     try {
       let imageUrl: string | null = null;
 
-      logger.info(`Telegram Message: ${JSON.stringify(message, null, 2)}`);
+      //logger.info(`Telegram Message (processImage): ${JSON.stringify(message, null, 2)}`);
 
       if ('photo' in message && message.photo?.length > 0) {
         const photo = message.photo[message.photo.length - 1];
