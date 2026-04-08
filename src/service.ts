@@ -19,6 +19,18 @@ import { TELEGRAM_SERVICE_NAME } from './constants';
 import { MessageManager } from './messageManager';
 import { TelegramEventTypes, type TelegramWorldPayload } from './types';
 
+const CANONICAL_OWNER_SETTING_KEY = 'MILADY_ADMIN_ENTITY_ID';
+
+function getCanonicalOwnerId(runtime: IAgentRuntime): UUID | null {
+  const value = runtime.getSetting(CANONICAL_OWNER_SETTING_KEY);
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? (trimmed as UUID) : null;
+}
+
 /**
  * Class representing a Telegram service that allows the agent to send and receive messages on Telegram.
  * This service handles all Telegram-specific functionality including:
@@ -579,9 +591,10 @@ export class TelegramService extends Service {
       }
     }
 
-    let ownerId = userId;
+    const canonicalOwnerId = getCanonicalOwnerId(this.runtime);
+    let ownerId = canonicalOwnerId ?? userId;
 
-    if (owner) {
+    if (!canonicalOwnerId && owner) {
       ownerId = createUniqueUuid(this.runtime, String(owner.user.id)) as UUID;
     }
 
