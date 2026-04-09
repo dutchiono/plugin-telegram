@@ -377,6 +377,26 @@ export class TelegramService extends Service {
     await this.syncLeftChatMember(ctx);
   }
 
+  private getChatDisplayName(chat: Context['chat'] | undefined, fallback: string): string {
+    if (!chat) {
+      return fallback;
+    }
+
+    if ('title' in chat && typeof chat.title === 'string' && chat.title.length > 0) {
+      return chat.title;
+    }
+
+    if ('first_name' in chat && typeof chat.first_name === 'string' && chat.first_name.length > 0) {
+      return chat.first_name;
+    }
+
+    if ('username' in chat && typeof chat.username === 'string' && chat.username.length > 0) {
+      return chat.username;
+    }
+
+    return fallback;
+  }
+
   /**
    * Synchronizes the message sender entity with the runtime system.
    * This is the most common entity sync case.
@@ -398,15 +418,12 @@ export class TelegramService extends Service {
     if (ctx.from && !this.syncedEntityIds.has(ctx.from.id.toString())) {
       const telegramId = ctx.from.id.toString();
       const entityId = createUniqueUuid(this.runtime, telegramId) as UUID;
+      const roomName = this.getChatDisplayName(ctx.chat, chatId);
 
       await this.runtime.ensureConnection({
         entityId,
         roomId: roomId,
-        roomName:
-          ctx.chat?.title ||
-          ctx.chat?.first_name ||
-          ctx.chat?.username ||
-          chatId,
+        roomName,
         userName: ctx.from.username,
         userId: telegramId as UUID,
         name: ctx.from.first_name || ctx.from.username || 'Unknown User',
@@ -442,6 +459,7 @@ export class TelegramService extends Service {
       const newMember = ctx.message.new_chat_member as any;
       const telegramId = newMember.id.toString();
       const entityId = createUniqueUuid(this.runtime, telegramId) as UUID;
+      const roomName = this.getChatDisplayName(ctx.chat, chatId);
 
       // Skip if we've already synced this entity
       if (this.syncedEntityIds.has(telegramId)) return;
@@ -450,11 +468,7 @@ export class TelegramService extends Service {
       await this.runtime.ensureConnection({
         entityId,
         roomId: roomId,
-        roomName:
-          ctx.chat?.title ||
-          ctx.chat?.first_name ||
-          ctx.chat?.username ||
-          chatId,
+        roomName,
         userName: newMember.username,
         userId: telegramId as UUID,
         name: newMember.first_name || newMember.username || 'Unknown User',
