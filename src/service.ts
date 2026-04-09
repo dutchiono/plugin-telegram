@@ -402,6 +402,11 @@ export class TelegramService extends Service {
       await this.runtime.ensureConnection({
         entityId,
         roomId: roomId,
+        roomName:
+          ctx.chat?.title ||
+          ctx.chat?.first_name ||
+          ctx.chat?.username ||
+          chatId,
         userName: ctx.from.username,
         userId: telegramId as UUID,
         name: ctx.from.first_name || ctx.from.username || 'Unknown User',
@@ -445,6 +450,11 @@ export class TelegramService extends Service {
       await this.runtime.ensureConnection({
         entityId,
         roomId: roomId,
+        roomName:
+          ctx.chat?.title ||
+          ctx.chat?.first_name ||
+          ctx.chat?.username ||
+          chatId,
         userName: newMember.username,
         userId: telegramId as UUID,
         name: newMember.first_name || newMember.username || 'Unknown User',
@@ -662,6 +672,7 @@ export class TelegramService extends Service {
     await this.batchProcessEntities(
       entities,
       generalRoom.id!,
+      generalRoom.name || generalRoom.channelId!,
       generalRoom.channelId!,
       generalRoom.type,
       worldId
@@ -707,6 +718,7 @@ export class TelegramService extends Service {
   private async batchProcessEntities(
     entities: Entity[],
     roomId: UUID,
+    roomName: string,
     channelId: string,
     roomType: ChannelType,
     worldId: UUID
@@ -732,6 +744,7 @@ export class TelegramService extends Service {
               await this.runtime.ensureConnection({
                 entityId: entity.id,
                 roomId: roomId,
+                roomName,
                 userName: telegramMetadata?.username,
                 name: telegramMetadata?.name,
                 userId: telegramMetadata?.id as UUID,

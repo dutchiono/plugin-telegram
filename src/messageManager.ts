@@ -588,6 +588,13 @@ export class MessageManager {
       await this.runtime.ensureConnection({
         entityId,
         roomId,
+        roomName:
+          ("title" in chat && typeof chat.title === "string" && chat.title) ||
+          ("first_name" in chat &&
+          typeof chat.first_name === "string" &&
+          chat.first_name) ||
+          ("username" in chat && typeof chat.username === "string" && chat.username) ||
+          telegramRoomid,
         userName: ctx.from.username,
         name: ctx.from.first_name,
         source: 'telegram',
