@@ -79,7 +79,7 @@ type TelegramServiceInternals = TelegramService & {
 describe("TelegramService owner mapping", () => {
   it("binds new Telegram worlds to the configured canonical owner instead of the chat creator", async () => {
     const runtime = createRuntimeMock({
-      MILADY_ADMIN_ENTITY_ID: "owner-app",
+      ELIZA_ADMIN_ENTITY_ID: "owner-app",
     });
     const service = new TelegramService(runtime) as TelegramServiceInternals;
     service.buildStandardizedEntities = vi.fn().mockResolvedValue([]);
@@ -102,6 +102,22 @@ describe("TelegramService owner mapping", () => {
       EventType.WORLD_JOINED,
       expect.any(Object),
     );
+  });
+
+  it("still honors the legacy Milady owner setting", async () => {
+    const runtime = createRuntimeMock({
+      MILADY_ADMIN_ENTITY_ID: "owner-app",
+    });
+    const service = new TelegramService(runtime) as TelegramServiceInternals;
+    service.buildStandardizedEntities = vi.fn().mockResolvedValue([]);
+    service.batchProcessEntities = vi.fn().mockResolvedValue(undefined);
+
+    await service.handleNewChat(createContextMock());
+
+    expect(runtime.ensureWorldExists).toHaveBeenCalledTimes(1);
+    const world = runtime.ensureWorldExists.mock.calls[0][0];
+    expect(world.metadata.ownership).toEqual({ ownerId: "owner-app" });
+    expect(world.metadata.roles).toEqual({ "owner-app": Role.OWNER });
   });
 
   it("falls back to the Telegram chat creator when no canonical owner is configured", async () => {

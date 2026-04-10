@@ -23,16 +23,24 @@ import { TELEGRAM_SERVICE_NAME } from './constants';
 import { MessageManager } from './messageManager';
 import { TelegramEventTypes, type TelegramWorldPayload } from './types';
 
-const CANONICAL_OWNER_SETTING_KEY = 'MILADY_ADMIN_ENTITY_ID';
+const CANONICAL_OWNER_SETTING_KEYS = [
+  'ELIZA_ADMIN_ENTITY_ID',
+  'MILADY_ADMIN_ENTITY_ID',
+] as const;
 
 function getCanonicalOwnerId(runtime: IAgentRuntime): UUID | null {
-  const value = runtime.getSetting(CANONICAL_OWNER_SETTING_KEY);
-  if (typeof value !== 'string') {
-    return null;
-  }
+  for (const key of CANONICAL_OWNER_SETTING_KEYS) {
+    const value = runtime.getSetting(key);
+    if (typeof value !== 'string') {
+      continue;
+    }
 
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? (trimmed as UUID) : null;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed as UUID;
+    }
+  }
+  return null;
 }
 
 function getTelegramChatDisplayName(
