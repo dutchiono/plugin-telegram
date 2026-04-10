@@ -18,12 +18,13 @@ export type TelegramConfig = z.infer<typeof telegramEnvSchema>;
  * @returns {Promise<TelegramConfig | null>} A promise that resolves with the validated Telegram configuration or null if invalid.
  */
 export async function validateTelegramConfig(
-  runtime: IAgentRuntime
+  runtime: IAgentRuntime,
 ): Promise<TelegramConfig | null> {
   try {
     const config = {
       TELEGRAM_BOT_TOKEN:
-        runtime.getSetting('TELEGRAM_BOT_TOKEN') || process.env.TELEGRAM_BOT_TOKEN,
+        runtime.getSetting('TELEGRAM_BOT_TOKEN') ||
+        process.env.TELEGRAM_BOT_TOKEN,
     };
 
     return telegramEnvSchema.parse(config);
@@ -32,7 +33,10 @@ export async function validateTelegramConfig(
       const errorMessages = error.issues
         .map((err) => `${err.path.join('.')}: ${err.message}`)
         .join('\n');
-      logger.warn({ src: 'plugin:telegram', errors: errorMessages }, 'Telegram configuration validation failed');
+      logger.warn(
+        { src: 'plugin:telegram', errors: errorMessages },
+        'Telegram configuration validation failed',
+      );
     }
     return null;
   }

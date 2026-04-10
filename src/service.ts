@@ -14,7 +14,11 @@ import {
   logger,
 } from '@elizaos/core';
 import { type Context, Telegraf } from 'telegraf';
-import { type ChatMemberOwner, type ChatMemberAdministrator, type User } from 'telegraf/types';
+import {
+  type ChatMemberOwner,
+  type ChatMemberAdministrator,
+  type User,
+} from 'telegraf/types';
 import { TELEGRAM_SERVICE_NAME } from './constants';
 import { MessageManager } from './messageManager';
 import { TelegramEventTypes, type TelegramWorldPayload } from './types';
@@ -31,6 +35,37 @@ function getCanonicalOwnerId(runtime: IAgentRuntime): UUID | null {
   return trimmed.length > 0 ? (trimmed as UUID) : null;
 }
 
+function getTelegramChatDisplayName(
+  chat: Context['chat'] | undefined,
+  fallback: string,
+): string {
+  if (!chat) {
+    return fallback;
+  }
+
+  if ('title' in chat && typeof chat.title === 'string' && chat.title.trim()) {
+    return chat.title;
+  }
+
+  if (
+    'first_name' in chat &&
+    typeof chat.first_name === 'string' &&
+    chat.first_name.trim()
+  ) {
+    return chat.first_name;
+  }
+
+  if (
+    'username' in chat &&
+    typeof chat.username === 'string' &&
+    chat.username.trim()
+  ) {
+    return chat.username;
+  }
+
+  return fallback;
+}
+
 /**
  * Class representing a Telegram service that allows the agent to send and receive messages on Telegram.
  * This service handles all Telegram-specific functionality including:
@@ -44,7 +79,8 @@ function getCanonicalOwnerId(runtime: IAgentRuntime): UUID | null {
  */
 export class TelegramService extends Service {
   static serviceType = TELEGRAM_SERVICE_NAME;
-  capabilityDescription = 'The agent is able to send and receive messages on telegram';
+  capabilityDescription =
+    'The agent is able to send and receive messages on telegram';
   private bot: Telegraf<Context> | null;
   public messageManager: MessageManager | null;
   private options;
@@ -62,12 +98,18 @@ export class TelegramService extends Service {
       this.messageManager = null;
       return;
     }
-    logger.debug({ src: 'plugin:telegram', agentId: runtime.agentId }, 'Constructing TelegramService');
+    logger.debug(
+      { src: 'plugin:telegram', agentId: runtime.agentId },
+      'Constructing TelegramService',
+    );
 
     // Check if Telegram bot token is available and valid
     const botToken = runtime.getSetting('TELEGRAM_BOT_TOKEN') as string;
     if (!botToken || botToken.trim() === '') {
-      logger.warn({ src: 'plugin:telegram', agentId: runtime.agentId }, 'Bot token not provided, Telegram functionality unavailable');
+      logger.warn(
+        { src: 'plugin:telegram', agentId: runtime.agentId },
+        'Bot token not provided, Telegram functionality unavailable',
+      );
       this.bot = null;
       this.messageManager = null;
       return;
@@ -85,9 +127,19 @@ export class TelegramService extends Service {
     try {
       this.bot = new Telegraf(botToken, this.options);
       this.messageManager = new MessageManager(this.bot, this.runtime);
-      logger.debug({ src: 'plugin:telegram', agentId: runtime.agentId }, 'TelegramService constructor completed');
+      logger.debug(
+        { src: 'plugin:telegram', agentId: runtime.agentId },
+        'TelegramService constructor completed',
+      );
     } catch (error) {
-      logger.error({ src: 'plugin:telegram', agentId: runtime.agentId, error: error instanceof Error ? error.message : String(error) }, 'Failed to initialize Telegram bot');
+      logger.error(
+        {
+          src: 'plugin:telegram',
+          agentId: runtime.agentId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to initialize Telegram bot',
+      );
       this.bot = null;
       this.messageManager = null;
     }
@@ -106,7 +158,10 @@ export class TelegramService extends Service {
 
     // If bot is not initialized (no token), return the service without further initialization
     if (!service.bot) {
-      logger.warn({ src: 'plugin:telegram', agentId: runtime.agentId }, 'Service started without bot functionality');
+      logger.warn(
+        { src: 'plugin:telegram', agentId: runtime.agentId },
+        'Service started without bot functionality',
+      );
       return service;
     }
 
@@ -116,7 +171,14 @@ export class TelegramService extends Service {
 
     while (retryCount < maxRetries) {
       try {
-        logger.info({ src: 'plugin:telegram', agentId: runtime.agentId, agentName: runtime.character.name }, 'Starting Telegram bot');
+        logger.info(
+          {
+            src: 'plugin:telegram',
+            agentId: runtime.agentId,
+            agentName: runtime.character.name,
+          },
+          'Starting Telegram bot',
+        );
         await service.initializeBot();
 
         // Set up middlewares before message handlers to ensure proper preprocessing
@@ -128,22 +190,52 @@ export class TelegramService extends Service {
         // Wait for bot to be ready by testing getMe()
         await service.bot!.telegram.getMe();
 
-        logger.success({ src: 'plugin:telegram', agentId: runtime.agentId, agentName: runtime.character.name }, 'Telegram bot started successfully');
+        logger.success(
+          {
+            src: 'plugin:telegram',
+            agentId: runtime.agentId,
+            agentName: runtime.character.name,
+          },
+          'Telegram bot started successfully',
+        );
         return service;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        logger.error({ src: 'plugin:telegram', agentId: runtime.agentId, attempt: retryCount + 1, error: lastError.message }, 'Initialization attempt failed');
+        logger.error(
+          {
+            src: 'plugin:telegram',
+            agentId: runtime.agentId,
+            attempt: retryCount + 1,
+            error: lastError.message,
+          },
+          'Initialization attempt failed',
+        );
         retryCount++;
 
         if (retryCount < maxRetries) {
           const delay = 2 ** retryCount * 1000; // Exponential backoff
-          logger.info({ src: 'plugin:telegram', agentId: runtime.agentId, delaySeconds: delay / 1000 }, 'Retrying initialization');
+          logger.info(
+            {
+              src: 'plugin:telegram',
+              agentId: runtime.agentId,
+              delaySeconds: delay / 1000,
+            },
+            'Retrying initialization',
+          );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    logger.error({ src: 'plugin:telegram', agentId: runtime.agentId, maxRetries, error: lastError?.message }, 'Initialization failed after all attempts');
+    logger.error(
+      {
+        src: 'plugin:telegram',
+        agentId: runtime.agentId,
+        maxRetries,
+        error: lastError?.message,
+      },
+      'Initialization failed after all attempts',
+    );
 
     // Return the service even if initialization failed, to prevent server crash
     return service;
@@ -182,7 +274,7 @@ export class TelegramService extends Service {
           ctx,
           runtime: this.runtime,
           source: 'telegram',
-        } as any
+        } as any,
       );
     });
     this.bot?.launch({
@@ -192,7 +284,15 @@ export class TelegramService extends Service {
 
     // Get bot info for identification purposes
     const botInfo = await this.bot!.telegram.getMe();
-    logger.debug({ src: 'plugin:telegram', agentId: this.runtime.agentId, botId: botInfo.id, botUsername: botInfo.username }, 'Bot info retrieved');
+    logger.debug(
+      {
+        src: 'plugin:telegram',
+        agentId: this.runtime.agentId,
+        botId: botInfo.id,
+        botUsername: botInfo.username,
+      },
+      'Bot info retrieved',
+    );
 
     // Handle sigint and sigterm signals to gracefully stop the bot
     process.once('SIGINT', () => this.bot?.stop('SIGINT'));
@@ -231,10 +331,20 @@ export class TelegramService extends Service {
    * @returns {Promise<void>}
    * @private
    */
-  private async authorizationMiddleware(ctx: Context, next: Function): Promise<void> {
+  private async authorizationMiddleware(
+    ctx: Context,
+    next: Function,
+  ): Promise<void> {
     if (!(await this.isGroupAuthorized(ctx))) {
       // Skip further processing if chat is not authorized
-      logger.debug({ src: 'plugin:telegram', agentId: this.runtime.agentId, chatId: ctx.chat?.id }, 'Chat not authorized, skipping');
+      logger.debug(
+        {
+          src: 'plugin:telegram',
+          agentId: this.runtime.agentId,
+          chatId: ctx.chat?.id,
+        },
+        'Chat not authorized, skipping',
+      );
       return;
     }
     await next();
@@ -250,8 +360,13 @@ export class TelegramService extends Service {
    * @returns {Promise<void>}
    * @private
    */
-  private async chatAndEntityMiddleware(ctx: Context, next: Function): Promise<void> {
-    if (!ctx.chat) return next();
+  private async chatAndEntityMiddleware(
+    ctx: Context,
+    next: Function,
+  ): Promise<void> {
+    if (!ctx.chat) {
+      return next();
+    }
 
     const chatId = ctx.chat.id.toString();
 
@@ -278,16 +393,30 @@ export class TelegramService extends Service {
    * @private
    */
   private async processExistingChat(ctx: Context): Promise<void> {
-    if (!ctx.chat) return;
+    if (!ctx.chat) {
+      return;
+    }
 
     const chat = ctx.chat;
 
     // Handle forum topics for supergroups with forums
-    if (chat.type === 'supergroup' && chat.is_forum && ctx.message?.message_thread_id) {
+    if (
+      chat.type === 'supergroup' &&
+      chat.is_forum &&
+      ctx.message?.message_thread_id
+    ) {
       try {
         await this.handleForumTopic(ctx);
       } catch (error) {
-        logger.error({ src: 'plugin:telegram', agentId: this.runtime.agentId, chatId: chat.id, error: error instanceof Error ? error.message : String(error) }, 'Error handling forum topic');
+        logger.error(
+          {
+            src: 'plugin:telegram',
+            agentId: this.runtime.agentId,
+            chatId: chat.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'Error handling forum topic',
+        );
       }
     }
 
@@ -310,7 +439,14 @@ export class TelegramService extends Service {
         // Message handling is now simplified since all preprocessing is done by middleware
         await this.messageManager!.handleMessage(ctx);
       } catch (error) {
-        logger.error({ src: 'plugin:telegram', agentId: this.runtime.agentId, error: error instanceof Error ? error.message : String(error) }, 'Error handling message');
+        logger.error(
+          {
+            src: 'plugin:telegram',
+            agentId: this.runtime.agentId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'Error handling message',
+        );
       }
     });
 
@@ -319,7 +455,14 @@ export class TelegramService extends Service {
       try {
         await this.messageManager!.handleReaction(ctx);
       } catch (error) {
-        logger.error({ src: 'plugin:telegram', agentId: this.runtime.agentId, error: error instanceof Error ? error.message : String(error) }, 'Error handling reaction');
+        logger.error(
+          {
+            src: 'plugin:telegram',
+            agentId: this.runtime.agentId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'Error handling reaction',
+        );
       }
     });
   }
@@ -331,7 +474,9 @@ export class TelegramService extends Service {
    */
   private async isGroupAuthorized(ctx: Context): Promise<boolean> {
     const chatId = ctx.chat?.id.toString();
-    if (!chatId) return false;
+    if (!chatId) {
+      return false;
+    }
 
     const allowedChats = this.runtime.getSetting('TELEGRAM_ALLOWED_CHATS');
     if (!allowedChats) {
@@ -342,7 +487,14 @@ export class TelegramService extends Service {
       const allowedChatsList = JSON.parse(allowedChats as string);
       return allowedChatsList.includes(chatId);
     } catch (error) {
-      logger.error({ src: 'plugin:telegram', agentId: this.runtime.agentId, error: error instanceof Error ? error.message : String(error) }, 'Error parsing TELEGRAM_ALLOWED_CHATS');
+      logger.error(
+        {
+          src: 'plugin:telegram',
+          agentId: this.runtime.agentId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Error parsing TELEGRAM_ALLOWED_CHATS',
+      );
       return false;
     }
   }
@@ -359,7 +511,9 @@ export class TelegramService extends Service {
    * @private
    */
   private async syncEntity(ctx: Context): Promise<void> {
-    if (!ctx.chat) return;
+    if (!ctx.chat) {
+      return;
+    }
 
     const chat = ctx.chat;
     const chatId = chat.id.toString();
@@ -368,7 +522,7 @@ export class TelegramService extends Service {
       this.runtime,
       ctx.message?.message_thread_id
         ? `${ctx.chat.id}-${ctx.message.message_thread_id}`
-        : ctx.chat.id.toString()
+        : ctx.chat.id.toString(),
     ) as UUID;
 
     // Handle all three entity sync cases separately for clarity
@@ -392,7 +546,7 @@ export class TelegramService extends Service {
     ctx: Context,
     worldId: UUID,
     roomId: UUID,
-    chatId: string
+    chatId: string,
   ): Promise<void> {
     // Handle message sender
     if (ctx.from && !this.syncedEntityIds.has(ctx.from.id.toString())) {
@@ -401,19 +555,15 @@ export class TelegramService extends Service {
 
       await this.runtime.ensureConnection({
         entityId,
-        roomId: roomId,
-        roomName:
-          ctx.chat?.title ||
-          ctx.chat?.first_name ||
-          ctx.chat?.username ||
-          chatId,
+        roomId,
+        roomName: getTelegramChatDisplayName(ctx.chat, chatId),
         userName: ctx.from.username,
         userId: telegramId as UUID,
         name: ctx.from.first_name || ctx.from.username || 'Unknown User',
         source: 'telegram',
         channelId: chatId,
         type: ChannelType.GROUP,
-        worldId: worldId,
+        worldId,
       });
 
       this.syncedEntityIds.add(entityId);
@@ -435,7 +585,7 @@ export class TelegramService extends Service {
     ctx: Context,
     worldId: UUID,
     roomId: UUID,
-    chatId: string
+    chatId: string,
   ): Promise<void> {
     // Handle new chat member
     if (ctx.message && 'new_chat_member' in ctx.message) {
@@ -444,24 +594,22 @@ export class TelegramService extends Service {
       const entityId = createUniqueUuid(this.runtime, telegramId) as UUID;
 
       // Skip if we've already synced this entity
-      if (this.syncedEntityIds.has(telegramId)) return;
+      if (this.syncedEntityIds.has(telegramId)) {
+        return;
+      }
 
       // We call ensure connection here for this user.
       await this.runtime.ensureConnection({
         entityId,
-        roomId: roomId,
-        roomName:
-          ctx.chat?.title ||
-          ctx.chat?.first_name ||
-          ctx.chat?.username ||
-          chatId,
+        roomId,
+        roomName: getTelegramChatDisplayName(ctx.chat, chatId),
         userName: newMember.username,
         userId: telegramId as UUID,
         name: newMember.first_name || newMember.username || 'Unknown User',
         source: 'telegram',
         channelId: chatId,
         type: ChannelType.GROUP,
-        worldId: worldId,
+        worldId,
       });
 
       this.syncedEntityIds.add(entityId);
@@ -478,7 +626,7 @@ export class TelegramService extends Service {
             username: newMember.username,
             first_name: newMember.first_name,
           },
-        } as any
+        } as any,
       );
     }
   }
@@ -518,14 +666,18 @@ export class TelegramService extends Service {
    * @private
    */
   private async handleForumTopic(ctx: Context): Promise<void> {
-    if (!ctx.chat || !ctx.message?.message_thread_id) return;
+    if (!ctx.chat || !ctx.message?.message_thread_id) {
+      return;
+    }
 
     const chat = ctx.chat;
     const chatId = chat.id.toString();
     const worldId = createUniqueUuid(this.runtime, chatId) as UUID;
 
     const room = await this.buildForumTopicRoom(ctx, worldId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
 
     await this.runtime.ensureRoomExists(room);
   }
@@ -534,7 +686,9 @@ export class TelegramService extends Service {
    * Builds entity for message sender
    */
   private buildMsgSenderEntity(from: User): Entity | null {
-    if (!from) return null;
+    if (!from) {
+      return null;
+    }
 
     const userId = createUniqueUuid(this.runtime, from.id.toString()) as UUID;
     const telegramId = from.id.toString();
@@ -563,7 +717,9 @@ export class TelegramService extends Service {
    * @private
    */
   private async handleNewChat(ctx: Context): Promise<void> {
-    if (!ctx.chat) return;
+    if (!ctx.chat) {
+      return;
+    }
 
     const chat = ctx.chat;
     const chatId = chat.id.toString();
@@ -588,16 +744,28 @@ export class TelegramService extends Service {
     // Fetch admin information for proper role assignment
     let admins: (ChatMemberOwner | ChatMemberAdministrator)[] = [];
     let owner: ChatMemberOwner | null = null;
-    if (chat.type === 'group' || chat.type === 'supergroup' || chat.type === 'channel') {
+    if (
+      chat.type === 'group' ||
+      chat.type === 'supergroup' ||
+      chat.type === 'channel'
+    ) {
       try {
         const chatAdmins = await ctx.getChatAdministrators();
         admins = chatAdmins;
         const foundOwner = admins.find(
-          (admin): admin is ChatMemberOwner => admin.status === 'creator'
+          (admin): admin is ChatMemberOwner => admin.status === 'creator',
         );
         owner = foundOwner || null;
       } catch (error) {
-        logger.warn({ src: 'plugin:telegram', agentId: this.runtime.agentId, chatId, error: error instanceof Error ? error.message : String(error) }, 'Could not get chat administrators');
+        logger.warn(
+          {
+            src: 'plugin:telegram',
+            agentId: this.runtime.agentId,
+            chatId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'Could not get chat administrators',
+        );
       }
     }
 
@@ -619,8 +787,8 @@ export class TelegramService extends Service {
         ...(ownerId && { ownership: { ownerId } }),
         roles: ownerId
           ? {
-              [ownerId]: Role.OWNER,
-            }
+            [ownerId]: Role.OWNER,
+          }
           : {},
         chatType: chat.type,
         isForumEnabled: chat.type === 'supergroup' && chat.is_forum,
@@ -648,7 +816,11 @@ export class TelegramService extends Service {
     const rooms = [generalRoom];
 
     // If this is a message in a forum topic, add the topic room as well
-    if (chat.type === 'supergroup' && chat.is_forum && ctx.message?.message_thread_id) {
+    if (
+      chat.type === 'supergroup' &&
+      chat.is_forum &&
+      ctx.message?.message_thread_id
+    ) {
       const topicRoom = await this.buildForumTopicRoom(ctx, worldId);
       if (topicRoom) {
         rooms.push(topicRoom);
@@ -662,7 +834,11 @@ export class TelegramService extends Service {
     // Add sender if not already in entities
     if (ctx.from) {
       const senderEntity = this.buildMsgSenderEntity(ctx.from);
-      if (senderEntity && senderEntity.id && !entities.some((e) => e.id === senderEntity.id)) {
+      if (
+        senderEntity &&
+        senderEntity.id &&
+        !entities.some((e) => e.id === senderEntity.id)
+      ) {
         entities.push(senderEntity);
         this.syncedEntityIds.add(senderEntity.id);
       }
@@ -675,7 +851,7 @@ export class TelegramService extends Service {
       generalRoom.name || generalRoom.channelId!,
       generalRoom.channelId!,
       generalRoom.type,
-      worldId
+      worldId,
     );
 
     // Create payload for world events
@@ -691,7 +867,10 @@ export class TelegramService extends Service {
 
     // Emit telegram-specific world joined event
     if (chat.type !== 'private') {
-      await this.runtime.emitEvent(TelegramEventTypes.WORLD_JOINED, telegramWorldPayload);
+      await this.runtime.emitEvent(
+        TelegramEventTypes.WORLD_JOINED,
+        telegramWorldPayload,
+      );
     }
 
     // Finally emit the standard WORLD_JOINED event
@@ -721,7 +900,7 @@ export class TelegramService extends Service {
     roomName: string,
     channelId: string,
     roomType: ChannelType,
-    worldId: UUID
+    worldId: UUID,
   ): Promise<void> {
     const batchSize = 50;
 
@@ -743,18 +922,25 @@ export class TelegramService extends Service {
 
               await this.runtime.ensureConnection({
                 entityId: entity.id,
-                roomId: roomId,
+                roomId,
                 roomName,
                 userName: telegramMetadata?.username,
                 name: telegramMetadata?.name,
                 userId: telegramMetadata?.id as UUID,
                 source: 'telegram',
-                channelId: channelId,
+                channelId,
                 type: roomType,
-                worldId: worldId,
+                worldId,
               });
             } else {
-              logger.warn({ src: 'plugin:telegram', agentId: this.runtime.agentId, entityNames: entity.names }, 'Skipping entity sync due to missing ID');
+              logger.warn(
+                {
+                  src: 'plugin:telegram',
+                  agentId: this.runtime.agentId,
+                  entityNames: entity.names,
+                },
+                'Skipping entity sync due to missing ID',
+              );
             }
           } catch (err) {
             const telegramMetadata = entity.metadata?.telegram as
@@ -762,9 +948,17 @@ export class TelegramService extends Service {
                   username?: string;
                 }
               | undefined;
-            logger.warn({ src: 'plugin:telegram', agentId: this.runtime.agentId, username: telegramMetadata?.username, error: err instanceof Error ? err.message : String(err) }, 'Failed to sync user');
+            logger.warn(
+              {
+                src: 'plugin:telegram',
+                agentId: this.runtime.agentId,
+                username: telegramMetadata?.username,
+                error: err instanceof Error ? err.message : String(err),
+              },
+              'Failed to sync user',
+            );
           }
-        })
+        }),
       );
 
       // Add a small delay between batches if not the last batch
@@ -782,7 +976,10 @@ export class TelegramService extends Service {
    * @returns {Object} Object containing chatTitle and channelType
    * @private
    */
-  private getChatTypeInfo(chat: any): { chatTitle: string; channelType: ChannelType } {
+  private getChatTypeInfo(chat: any): {
+    chatTitle: string;
+    channelType: ChannelType;
+  } {
     let chatTitle: string;
     let channelType: ChannelType;
 
@@ -825,7 +1022,10 @@ export class TelegramService extends Service {
     try {
       // For private chats, add the user
       if (chat.type === 'private' && chat.id) {
-        const userId = createUniqueUuid(this.runtime, chat.id.toString()) as UUID;
+        const userId = createUniqueUuid(
+          this.runtime,
+          chat.id.toString(),
+        ) as UUID;
         entities.push({
           id: userId,
           names: [chat.first_name || 'Unknown User'],
@@ -844,14 +1044,23 @@ export class TelegramService extends Service {
         // For groups and supergroups, try to get member information
         try {
           // Get chat administrators (this is what's available through the Bot API)
-          const admins = await this.bot?.telegram.getChatAdministrators(chat.id);
+          const admins = await this.bot?.telegram.getChatAdministrators(
+            chat.id,
+          );
 
           if (admins && admins.length > 0) {
             for (const admin of admins) {
-              const userId = createUniqueUuid(this.runtime, admin.user.id.toString()) as UUID;
+              const userId = createUniqueUuid(
+                this.runtime,
+                admin.user.id.toString(),
+              ) as UUID;
               entities.push({
                 id: userId,
-                names: [admin.user.first_name || admin.user.username || 'Unknown Admin'],
+                names: [
+                  admin.user.first_name ||
+                    admin.user.username ||
+                    'Unknown Admin',
+                ],
                 agentId: this.runtime.agentId,
                 metadata: {
                   telegram: {
@@ -860,7 +1069,8 @@ export class TelegramService extends Service {
                     name: admin.user.first_name || 'Unknown Admin',
                     isAdmin: true,
                     adminTitle:
-                      admin.custom_title || (admin.status === 'creator' ? 'Owner' : 'Admin'),
+                      admin.custom_title ||
+                      (admin.status === 'creator' ? 'Owner' : 'Admin'),
                   },
                   source: 'telegram',
                   roles: [admin.status === 'creator' ? Role.OWNER : Role.ADMIN],
@@ -870,11 +1080,26 @@ export class TelegramService extends Service {
             }
           }
         } catch (error) {
-          logger.warn({ src: 'plugin:telegram', agentId: this.runtime.agentId, chatId: chat.id, error: error instanceof Error ? error.message : String(error) }, 'Could not fetch administrators');
+          logger.warn(
+            {
+              src: 'plugin:telegram',
+              agentId: this.runtime.agentId,
+              chatId: chat.id,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'Could not fetch administrators',
+          );
         }
       }
     } catch (error) {
-      logger.error({ src: 'plugin:telegram', agentId: this.runtime.agentId, error: error instanceof Error ? error.message : String(error) }, 'Error building standardized entities');
+      logger.error(
+        {
+          src: 'plugin:telegram',
+          agentId: this.runtime.agentId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Error building standardized entities',
+      );
     }
 
     return entities;
@@ -889,14 +1114,24 @@ export class TelegramService extends Service {
    * @returns {Promise<Room | null>} A Promise that resolves with the room or null if not a topic
    * @private
    */
-  private async buildForumTopicRoom(ctx: Context, worldId: UUID): Promise<Room | null> {
-    if (!ctx.chat || !ctx.message?.message_thread_id) return null;
-    if (ctx.chat.type !== 'supergroup' || !ctx.chat.is_forum) return null;
+  private async buildForumTopicRoom(
+    ctx: Context,
+    worldId: UUID,
+  ): Promise<Room | null> {
+    if (!ctx.chat || !ctx.message?.message_thread_id) {
+      return null;
+    }
+    if (ctx.chat.type !== 'supergroup' || !ctx.chat.is_forum) {
+      return null;
+    }
 
     const chat = ctx.chat;
     const chatId = chat.id.toString();
     const threadId = ctx.message.message_thread_id.toString();
-    const roomId = createUniqueUuid(this.runtime, `${chatId}-${threadId}`) as UUID;
+    const roomId = createUniqueUuid(
+      this.runtime,
+      `${chatId}-${threadId}`,
+    ) as UUID;
 
     try {
       // Ensure the message object is fully initialized
@@ -913,7 +1148,11 @@ export class TelegramService extends Service {
         replyMessage.forum_topic_created
       ) {
         const topicCreated = replyMessage.forum_topic_created;
-        if (topicCreated && typeof topicCreated === 'object' && 'name' in topicCreated) {
+        if (
+          topicCreated &&
+          typeof topicCreated === 'object' &&
+          'name' in topicCreated
+        ) {
           topicName = topicCreated.name;
         }
       }
@@ -928,7 +1167,11 @@ export class TelegramService extends Service {
         replyMessage.reply_to_message.forum_topic_created
       ) {
         const topicCreated = replyMessage.reply_to_message.forum_topic_created;
-        if (topicCreated && typeof topicCreated === 'object' && 'name' in topicCreated) {
+        if (
+          topicCreated &&
+          typeof topicCreated === 'object' &&
+          'name' in topicCreated
+        ) {
           topicName = topicCreated.name;
         }
       }
@@ -943,7 +1186,7 @@ export class TelegramService extends Service {
         serverId: chatId,
         worldId,
         metadata: {
-          threadId: threadId,
+          threadId,
           isForumTopic: true,
           parentChatId: chatId,
         },
@@ -951,32 +1194,55 @@ export class TelegramService extends Service {
 
       return room;
     } catch (error) {
-      logger.error({ src: 'plugin:telegram', agentId: this.runtime.agentId, chatId, threadId, error: error instanceof Error ? error.message : String(error) }, 'Error building forum topic room');
+      logger.error(
+        {
+          src: 'plugin:telegram',
+          agentId: this.runtime.agentId,
+          chatId,
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Error building forum topic room',
+      );
       return null;
     }
   }
 
-  static registerSendHandlers(runtime: IAgentRuntime, serviceInstance: TelegramService) {
+  static registerSendHandlers(
+    runtime: IAgentRuntime,
+    serviceInstance: TelegramService,
+  ) {
     if (serviceInstance && serviceInstance.bot) {
       runtime.registerSendHandler(
         'telegram',
-        serviceInstance.handleSendMessage.bind(serviceInstance)
+        serviceInstance.handleSendMessage.bind(serviceInstance),
       );
-      logger.info({ src: 'plugin:telegram', agentId: runtime.agentId }, 'Registered send handler');
+      logger.info(
+        { src: 'plugin:telegram', agentId: runtime.agentId },
+        'Registered send handler',
+      );
     } else {
-      logger.warn({ src: 'plugin:telegram', agentId: runtime.agentId }, 'Cannot register send handler, bot not initialized');
+      logger.warn(
+        { src: 'plugin:telegram', agentId: runtime.agentId },
+        'Cannot register send handler, bot not initialized',
+      );
     }
   }
 
   async handleSendMessage(
     runtime: IAgentRuntime,
     target: TargetInfo,
-    content: Content
+    content: Content,
   ): Promise<void> {
     // Check if bot and messageManager are available
     if (!this.bot || !this.messageManager) {
-      logger.error({ src: 'plugin:telegram', agentId: runtime.agentId }, 'Bot not initialized, cannot send messages');
-      throw new Error('Telegram bot is not initialized. Please provide TELEGRAM_BOT_TOKEN.');
+      logger.error(
+        { src: 'plugin:telegram', agentId: runtime.agentId },
+        'Bot not initialized, cannot send messages',
+      );
+      throw new Error(
+        'Telegram bot is not initialized. Please provide TELEGRAM_BOT_TOKEN.',
+      );
     }
 
     let chatId: number | string | undefined;
@@ -992,33 +1258,44 @@ export class TelegramService extends Service {
       // Placeholder - requires logic to map roomId -> telegram chat ID if different
       const room = await runtime.getRoom(target.roomId);
       chatId = room?.channelId; // Assuming channelId on Room IS the telegram ID
-      if (!chatId)
-        throw new Error(`Could not resolve Telegram chat ID from roomId ${target.roomId}`);
+      if (!chatId) {
+        throw new Error(
+          `Could not resolve Telegram chat ID from roomId ${target.roomId}`,
+        );
+      }
     } else if (target.entityId) {
       const entity = await runtime.getEntityById(target.entityId);
       if (!entity) {
         throw new Error(`Entity ${target.entityId} not found`);
       }
-      const telegramMeta = entity.metadata?.telegram as Record<string, unknown> | undefined;
+      const telegramMeta = entity.metadata?.telegram as
+        | Record<string, unknown>
+        | undefined;
       const telegramId = telegramMeta?.id;
       if (!telegramId) {
         logger.error(
-          { src: 'plugin:telegram', agentId: runtime.agentId, entityId: target.entityId },
-          'Entity has no telegram.id in metadata — cannot send DM without Telegram user ID'
+          {
+            src: 'plugin:telegram',
+            agentId: runtime.agentId,
+            entityId: target.entityId,
+          },
+          'Entity has no telegram.id in metadata — cannot send DM without Telegram user ID',
         );
         throw new Error(
           `Entity ${target.entityId} has no telegram.id in metadata — ` +
-          `cannot send DM without Telegram user ID`
+            'cannot send DM without Telegram user ID',
         );
       }
       chatId = telegramId as number | string;
     } else {
-      throw new Error('Telegram SendHandler requires channelId, roomId, or entityId.');
+      throw new Error(
+        'Telegram SendHandler requires channelId, roomId, or entityId.',
+      );
     }
 
     if (!chatId) {
       throw new Error(
-        `Could not determine target Telegram chat ID for target: ${JSON.stringify(target)}`
+        `Could not determine target Telegram chat ID for target: ${JSON.stringify(target)}`,
       );
     }
 
@@ -1026,9 +1303,20 @@ export class TelegramService extends Service {
       // Use existing MessageManager method, pass chatId and content
       // Assuming sendMessage handles splitting, markdown, etc.
       await this.messageManager.sendMessage(chatId, content);
-      logger.info({ src: 'plugin:telegram', agentId: runtime.agentId, chatId }, 'Message sent');
+      logger.info(
+        { src: 'plugin:telegram', agentId: runtime.agentId, chatId },
+        'Message sent',
+      );
     } catch (error) {
-      logger.error({ src: 'plugin:telegram', agentId: runtime.agentId, chatId, error: error instanceof Error ? error.message : String(error) }, 'Error sending message');
+      logger.error(
+        {
+          src: 'plugin:telegram',
+          agentId: runtime.agentId,
+          chatId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Error sending message',
+      );
       throw error;
     }
   }

@@ -11,7 +11,9 @@ const TELEGRAM_RESERVED_REGEX = /([_*[\]()~`>#+\-=|{}.!\\])/g;
  * (Any character in 1–126 that is reserved is prefixed with a backslash.)
  */
 function escapePlainText(text: string): string {
-  if (!text) return '';
+  if (!text) {
+    return '';
+  }
   return text.replace(TELEGRAM_RESERVED_REGEX, '\\$1');
 }
 
@@ -19,7 +21,9 @@ function escapePlainText(text: string): string {
  * Escapes plain text line‐by–line while preserving any leading blockquote markers.
  */
 function escapePlainTextPreservingBlockquote(text: string): string {
-  if (!text) return '';
+  if (!text) {
+    return '';
+  }
   return text
     .split('\n')
     .map((line) => {
@@ -39,7 +43,9 @@ function escapePlainTextPreservingBlockquote(text: string): string {
  * Telegram requires that inside code blocks all ` and \ characters are escaped.
  */
 function escapeCode(text: string): string {
-  if (!text) return '';
+  if (!text) {
+    return '';
+  }
   return text.replace(/([`\\])/g, '\\$1');
 }
 
@@ -48,7 +54,9 @@ function escapeCode(text: string): string {
  * inside the URL, only ")" and "\" need to be escaped.
  */
 function escapeUrl(url: string): string {
-  if (!url) return '';
+  if (!url) {
+    return '';
+  }
   return url.replace(/([)\\])/g, '\\$1');
 }
 
@@ -75,16 +83,19 @@ export function convertMarkdownToTelegram(markdown: string): string {
 
   // 1. Fenced code blocks (```...```)
   //    Matches an optional language (letters only) and then any content until the closing ```
-  converted = converted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-    const escapedCode = escapeCode(code);
-    const formatted = '```' + (lang || '') + '\n' + escapedCode + '```';
-    return storeReplacement(formatted);
-  });
+  converted = converted.replace(
+    /```(\w+)?\n([\s\S]*?)```/g,
+    (_match, lang, code) => {
+      const escapedCode = escapeCode(code);
+      const formatted = `\`\`\`${lang || ''}\n${escapedCode}\`\`\``;
+      return storeReplacement(formatted);
+    },
+  );
 
   // 2. Inline code (`...`)
   converted = converted.replace(/`([^`]+)`/g, (_match, code) => {
     const escapedCode = escapeCode(code);
-    const formatted = '`' + escapedCode + '`';
+    const formatted = `\`${escapedCode}\``;
     return storeReplacement(formatted);
   });
 
@@ -97,7 +108,7 @@ export function convertMarkdownToTelegram(markdown: string): string {
       const escapedURL = escapeUrl(url);
       const formatted = `[${formattedText}](${escapedURL})`;
       return storeReplacement(formatted);
-    }
+    },
   );
 
   // 4. Bold text: standard markdown bold **text**
@@ -121,11 +132,14 @@ export function convertMarkdownToTelegram(markdown: string): string {
   //    In Telegram MarkdownV2 italic must be delimited by underscores.
   //    Process asterisk-based italic first.
   //    (Using negative lookbehind/lookahead to avoid matching bold **)
-  converted = converted.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, (_match, content) => {
-    const formattedContent = escapePlainText(content);
-    const formatted = `_${formattedContent}_`;
-    return storeReplacement(formatted);
-  });
+  converted = converted.replace(
+    /(?<!\*)\*([^*\n]+)\*(?!\*)/g,
+    (_match, content) => {
+      const formattedContent = escapePlainText(content);
+      const formatted = `_${formattedContent}_`;
+      return storeReplacement(formatted);
+    },
+  );
   //    Then underscore-based italic.
   converted = converted.replace(/_([^_\n]+)_/g, (_match, content) => {
     const formattedContent = escapePlainText(content);
@@ -136,11 +150,14 @@ export function convertMarkdownToTelegram(markdown: string): string {
   // 7. Headers: Convert markdown headers (lines starting with '#' characters)
   //    to bold text. This avoids unescaped '#' characters (which crash Telegram)
   //    by removing them and wrapping the rest of the line in bold markers.
-  converted = converted.replace(/^(#{1,6})\s*(.*)$/gm, (_match, _hashes, headerContent: string) => {
-    // Remove any trailing whitespace and escape the header text.
-    const formatted = `*${escapePlainText(headerContent.trim())}*`;
-    return storeReplacement(formatted);
-  });
+  converted = converted.replace(
+    /^(#{1,6})\s*(.*)$/gm,
+    (_match, _hashes, headerContent: string) => {
+      // Remove any trailing whitespace and escape the header text.
+      const formatted = `*${escapePlainText(headerContent.trim())}*`;
+      return storeReplacement(formatted);
+    },
+  );
 
   // Define the placeholder marker as a string constant
   const NULL_CHAR = String.fromCharCode(0);
@@ -163,7 +180,7 @@ export function convertMarkdownToTelegram(markdown: string): string {
 
   // Finally, substitute back all placeholders with their preformatted content.
   const finalResult = finalEscaped.replace(PLACEHOLDER_REPLACE, (_, index) => {
-    return replacements[parseInt(index)];
+    return replacements[Number.parseInt(index, 10)];
   });
 
   return finalResult;
@@ -181,7 +198,9 @@ export function convertMarkdownToTelegram(markdown: string): string {
  */
 export function splitMessage(text: string, maxLength = 4096): string[] {
   const chunks: string[] = [];
-  if (!text) return chunks;
+  if (!text) {
+    return chunks;
+  }
   let currentChunk = '';
 
   const lines = text.split('\n');
@@ -189,12 +208,16 @@ export function splitMessage(text: string, maxLength = 4096): string[] {
     if (currentChunk.length + line.length + 1 <= maxLength) {
       currentChunk += (currentChunk ? '\n' : '') + line;
     } else {
-      if (currentChunk) chunks.push(currentChunk);
+      if (currentChunk) {
+        chunks.push(currentChunk);
+      }
       currentChunk = line;
     }
   }
 
-  if (currentChunk) chunks.push(currentChunk);
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
   return chunks;
 }
 
@@ -203,14 +226,21 @@ export function splitMessage(text: string, maxLength = 4096): string[] {
  * @param {Button[]} buttons - The buttons from Eliza content
  * @returns {InlineKeyboardButton[]} Array of Telegram buttons
  */
-export function convertToTelegramButtons(buttons?: Button[] | null): InlineKeyboardButton[] {
-  if (!buttons) return [];
+export function convertToTelegramButtons(
+  buttons?: Button[] | null,
+): InlineKeyboardButton[] {
+  if (!buttons) {
+    return [];
+  }
   const telegramButtons: InlineKeyboardButton[] = [];
 
   for (const button of buttons) {
     // Validate button has required properties
     if (!button || !button.text || !button.url) {
-      logger.warn({ button }, 'Invalid button configuration, skipping');
+      logger.warn(
+        { src: 'plugin:telegram', button },
+        'Invalid button configuration, skipping',
+      );
       continue;
     }
 
@@ -223,7 +253,10 @@ export function convertToTelegramButtons(buttons?: Button[] | null): InlineKeybo
         telegramButton = Markup.button.url(button.text, button.url);
         break;
       default:
-        logger.warn({ src: 'plugin:telegram', buttonKind: button.kind }, 'Unknown button kind, treating as URL button');
+        logger.warn(
+          { src: 'plugin:telegram', buttonKind: button.kind },
+          'Unknown button kind, treating as URL button',
+        );
         telegramButton = Markup.button.url(button.text, button.url);
         break;
     }
@@ -240,7 +273,9 @@ export function convertToTelegramButtons(buttons?: Button[] | null): InlineKeybo
  * @returns {string} The cleaned text
  */
 export function cleanText(text: string | undefined | null): string {
-  if (!text) return '';
+  if (!text) {
+    return '';
+  }
   // Avoid control char in regex literal; lint-friendly
   return text.split('\u0000').join('');
 }

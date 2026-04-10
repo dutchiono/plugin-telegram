@@ -1,4 +1,9 @@
-import type { Content, EntityPayload, MessagePayload, WorldPayload } from '@elizaos/core';
+import type {
+  Content,
+  EntityPayload,
+  MessagePayload,
+  WorldPayload,
+} from '@elizaos/core';
 import type { Chat, Message, ReactionType } from '@telegraf/types';
 import type { Context } from 'telegraf';
 
@@ -43,7 +48,7 @@ export enum TelegramEventTypes {
   // Interaction events
   REACTION_RECEIVED = 'TELEGRAM_REACTION_RECEIVED',
   INTERACTION_RECEIVED = 'TELEGRAM_INTERACTION_RECEIVED',
-  
+
   // Command events
   SLASH_START = 'TELEGRAM_SLASH_START',
 }
