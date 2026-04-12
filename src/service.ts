@@ -795,8 +795,8 @@ export class TelegramService extends Service {
         ...(ownerId && { ownership: { ownerId } }),
         roles: ownerId
           ? {
-            [ownerId]: Role.OWNER,
-          }
+              [ownerId]: Role.OWNER,
+            }
           : {},
         chatType: chat.type,
         isForumEnabled: chat.type === 'supergroup' && chat.is_forum,

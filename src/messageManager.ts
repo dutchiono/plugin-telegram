@@ -786,9 +786,9 @@ export class MessageManager {
           inReplyTo:
             'reply_to_message' in message && message.reply_to_message
               ? createUniqueUuid(
-                this.runtime,
-                message.reply_to_message.message_id.toString(),
-              )
+                  this.runtime,
+                  message.reply_to_message.message_id.toString(),
+                )
               : undefined,
         },
         metadata: {
