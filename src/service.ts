@@ -1,23 +1,23 @@
 import {
   ChannelType,
   type Content,
+  createUniqueUuid,
   type Entity,
   EventType,
   type IAgentRuntime,
+  logger,
   Role,
   type Room,
   Service,
   type TargetInfo,
   type UUID,
   type World,
-  createUniqueUuid,
-  logger,
 } from '@elizaos/core';
 import { type Context, Telegraf } from 'telegraf';
-import {
-  type ChatMemberOwner,
-  type ChatMemberAdministrator,
-  type User,
+import type {
+  ChatMemberAdministrator,
+  ChatMemberOwner,
+  User,
 } from 'telegraf/types';
 import { TELEGRAM_SERVICE_NAME } from './constants';
 import { MessageManager } from './messageManager';
@@ -195,8 +195,13 @@ export class TelegramService extends Service {
         // Set up message handlers after middlewares
         service.setupMessageHandlers();
 
+        const bot = service.bot;
+        if (!bot) {
+          throw new Error('Telegram bot was not initialized');
+        }
+
         // Wait for bot to be ready by testing getMe()
-        await service.bot!.telegram.getMe();
+        await bot.telegram.getMe();
 
         logger.success(
           {
@@ -275,7 +280,12 @@ export class TelegramService extends Service {
    * @returns {Promise<void>} A Promise that resolves when the initialization is complete.
    */
   private async initializeBot(): Promise<void> {
-    this.bot?.start((ctx) => {
+    const bot = this.bot;
+    if (!bot) {
+      throw new Error('Telegram bot is not initialized');
+    }
+
+    bot.start((ctx) => {
       this.runtime.emitEvent(
         TelegramEventTypes.SLASH_START as string,
         {
@@ -285,13 +295,13 @@ export class TelegramService extends Service {
         } as any,
       );
     });
-    this.bot?.launch({
+    bot.launch({
       dropPendingUpdates: true,
       allowedUpdates: ['message', 'message_reaction'],
     });
 
     // Get bot info for identification purposes
-    const botInfo = await this.bot!.telegram.getMe();
+    const botInfo = await bot.telegram.getMe();
     logger.debug(
       {
         src: 'plugin:telegram',
@@ -303,8 +313,8 @@ export class TelegramService extends Service {
     );
 
     // Handle sigint and sigterm signals to gracefully stop the bot
-    process.once('SIGINT', () => this.bot?.stop('SIGINT'));
-    process.once('SIGTERM', () => this.bot?.stop('SIGTERM'));
+    process.once('SIGINT', () => bot.stop('SIGINT'));
+    process.once('SIGTERM', () => bot.stop('SIGTERM'));
   }
 
   /**
@@ -445,7 +455,7 @@ export class TelegramService extends Service {
     this.bot?.on('message', async (ctx) => {
       try {
         // Message handling is now simplified since all preprocessing is done by middleware
-        await this.messageManager!.handleMessage(ctx);
+        await this.messageManager?.handleMessage(ctx);
       } catch (error) {
         logger.error(
           {
@@ -461,7 +471,7 @@ export class TelegramService extends Service {
     // Reaction handler
     this.bot?.on('message_reaction', async (ctx) => {
       try {
-        await this.messageManager!.handleReaction(ctx);
+        await this.messageManager?.handleReaction(ctx);
       } catch (error) {
         logger.error(
           {
@@ -842,11 +852,7 @@ export class TelegramService extends Service {
     // Add sender if not already in entities
     if (ctx.from) {
       const senderEntity = this.buildMsgSenderEntity(ctx.from);
-      if (
-        senderEntity &&
-        senderEntity.id &&
-        !entities.some((e) => e.id === senderEntity.id)
-      ) {
+      if (senderEntity?.id && !entities.some((e) => e.id === senderEntity.id)) {
         entities.push(senderEntity);
         this.syncedEntityIds.add(senderEntity.id);
       }
@@ -1220,7 +1226,7 @@ export class TelegramService extends Service {
     runtime: IAgentRuntime,
     serviceInstance: TelegramService,
   ) {
-    if (serviceInstance && serviceInstance.bot) {
+    if (serviceInstance?.bot) {
       runtime.registerSendHandler(
         'telegram',
         serviceInstance.handleSendMessage.bind(serviceInstance),

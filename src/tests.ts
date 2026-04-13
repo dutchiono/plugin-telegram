@@ -1,7 +1,6 @@
-import { type IAgentRuntime, type TestSuite, logger } from '@elizaos/core';
+import { type IAgentRuntime, logger, type TestSuite } from '@elizaos/core';
 import type { Chat, User } from '@telegraf/types';
-import type { Telegraf } from 'telegraf';
-import type { Context } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import type { MessageManager } from './messageManager';
 import type { TelegramService } from './service';
 import type { TelegramContent } from './types';
@@ -101,7 +100,7 @@ export class TelegramTestSuite implements TestSuite {
 
   async testCreatingTelegramBot(runtime: IAgentRuntime) {
     this.telegramClient = runtime.getService('telegram') as TelegramService;
-    if (!this.telegramClient || !this.telegramClient.messageManager) {
+    if (!this.telegramClient?.messageManager) {
       throw new Error(
         'Telegram service or message manager not initialized - check TELEGRAM_BOT_TOKEN',
       );
@@ -244,7 +243,7 @@ export class TelegramTestSuite implements TestSuite {
       };
 
       const result = await this.messageManager.processImage(mockMessage as any);
-      if (!result || !result.description) {
+      if (!result?.description) {
         throw new Error(
           'Error processing Telegram image or description not found',
         );

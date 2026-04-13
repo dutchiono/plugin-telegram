@@ -1,7 +1,7 @@
+import { logger } from '@elizaos/core';
+import type { InlineKeyboardButton } from '@telegraf/types';
 import { Markup } from 'telegraf';
 import type { Button } from './types';
-import type { InlineKeyboardButton } from '@telegraf/types';
-import { logger } from '@elizaos/core';
 
 // A list of Telegram MarkdownV2 reserved characters that must be escaped
 const TELEGRAM_RESERVED_REGEX = /([_*[\]()~`>#+\-=|{}.!\\])/g;
@@ -236,7 +236,7 @@ export function convertToTelegramButtons(
 
   for (const button of buttons) {
     // Validate button has required properties
-    if (!button || !button.text || !button.url) {
+    if (!button?.text || !button.url) {
       logger.warn(
         { src: 'plugin:telegram', button },
         'Invalid button configuration, skipping',

@@ -1,24 +1,25 @@
 import {
   ChannelType,
   type Content,
+  createUniqueUuid,
   EventType,
   type HandlerCallback,
   type IAgentRuntime,
+  logger,
   type Media,
   type Memory,
   ModelType,
   ServiceType,
   type UUID,
-  createUniqueUuid,
-  logger,
 } from '@elizaos/core';
 import type {
   Chat,
+  Document,
   Message,
   ReactionType,
   Update,
-  Document,
 } from '@telegraf/types';
+import fs from 'node:fs';
 import type { Context, NarrowedContext, Telegraf } from 'telegraf';
 import { Markup } from 'telegraf';
 import {
@@ -27,11 +28,10 @@ import {
   type TelegramReactionReceivedPayload,
 } from './types';
 import {
-  convertToTelegramButtons,
-  convertMarkdownToTelegram,
   cleanText,
+  convertMarkdownToTelegram,
+  convertToTelegramButtons,
 } from './utils';
-import fs from 'fs';
 
 /**
  * Interface for structured document processing results.
@@ -504,7 +504,7 @@ export class MessageManager {
           audio: MediaType.AUDIO,
         };
 
-        let mediaType: MediaType | undefined = undefined;
+        let mediaType: MediaType | undefined;
 
         for (const prefix in typeMap) {
           if (attachment.contentType?.startsWith(prefix)) {
