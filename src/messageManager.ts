@@ -26,6 +26,7 @@ import {
   type TelegramContent,
   TelegramEventTypes,
   type TelegramReactionReceivedPayload,
+  type TelegramMessageSentPayload,
 } from './types';
 import {
   cleanText,
@@ -81,7 +82,7 @@ const getChannelType = (chat: Chat): ChannelType => {
     case 'channel':
       return ChannelType.GROUP;
     default:
-      throw new Error(`Unrecognized Telegram chat type: ${String(chat.type)}`);
+      throw new Error('Unrecognized Telegram chat type');
   }
 };
 
@@ -1120,13 +1121,17 @@ export class MessageManager {
         });
 
         // Also emit platform-specific event
-        this.runtime.emitEvent(TelegramEventTypes.MESSAGE_SENT, {
+        const telegramMessageSentPayload: TelegramMessageSentPayload = {
           runtime: this.runtime,
           source: 'telegram',
           originalMessages: sentMessages,
           chatId,
           message: firstMemory,
-        });
+        };
+        this.runtime.emitEvent(
+          TelegramEventTypes.MESSAGE_SENT as string,
+          telegramMessageSentPayload,
+        );
       }
 
       return sentMessages;
