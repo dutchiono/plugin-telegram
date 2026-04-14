@@ -73,8 +73,10 @@ type TelegramMediaSender = (
 ) => Promise<unknown>;
 
 const getChannelType = (chat: Chat): ChannelType => {
+  const chatType = chat.type;
+
   // Use a switch statement for clarity and exhaustive checks
-  switch (chat.type) {
+  switch (chatType) {
     case 'private':
       return ChannelType.DM;
     case 'group':
@@ -82,7 +84,7 @@ const getChannelType = (chat: Chat): ChannelType => {
     case 'channel':
       return ChannelType.GROUP;
     default:
-      throw new Error('Unrecognized Telegram chat type');
+      throw new Error(`Unrecognized Telegram chat type: ${String(chatType)}`);
   }
 };
 

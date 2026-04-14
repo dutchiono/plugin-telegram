@@ -1,5 +1,6 @@
 import type {
   Content,
+  EventPayload,
   EntityPayload,
   MessagePayload,
   WorldPayload,
@@ -63,11 +64,19 @@ export interface TelegramEventPayloadMap {
   [TelegramEventTypes.WORLD_JOINED]: TelegramWorldPayload;
   [TelegramEventTypes.WORLD_CONNECTED]: TelegramWorldPayload;
   [TelegramEventTypes.WORLD_LEFT]: TelegramWorldPayload;
-  [TelegramEventTypes.SLASH_START]: { ctx: Context };
+  [TelegramEventTypes.SLASH_START]: TelegramSlashStartPayload;
   [TelegramEventTypes.ENTITY_JOINED]: TelegramEntityPayload;
   [TelegramEventTypes.ENTITY_LEFT]: TelegramEntityPayload;
   [TelegramEventTypes.ENTITY_UPDATED]: TelegramEntityPayload;
   [TelegramEventTypes.INTERACTION_RECEIVED]: TelegramReactionReceivedPayload;
+}
+
+declare module '@elizaos/core' {
+  interface EventPayloadMap extends TelegramEventPayloadMap {}
+}
+
+export interface TelegramSlashStartPayload extends EventPayload {
+  ctx: Context;
 }
 
 /**

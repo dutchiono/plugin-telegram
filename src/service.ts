@@ -1004,10 +1004,11 @@ export class TelegramService extends Service {
     chatTitle: string;
     channelType: ChannelType;
   } {
+    const chatType = chat.type;
     let chatTitle: string;
     let channelType: ChannelType;
 
-    switch (chat.type) {
+    switch (chatType) {
       case 'private':
         chatTitle = `Chat with ${chat.first_name || 'Unknown User'}`;
         channelType = ChannelType.DM;
@@ -1025,7 +1026,7 @@ export class TelegramService extends Service {
         channelType = ChannelType.FEED;
         break;
       default:
-        throw new Error('Unrecognized Telegram chat type');
+        throw new Error(`Unrecognized Telegram chat type: ${String(chatType)}`);
     }
 
     return { chatTitle, channelType };
