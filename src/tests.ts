@@ -1,5 +1,5 @@
 import { type IAgentRuntime, logger, type TestSuite } from '@elizaos/core';
-import type { Chat, User } from '@telegraf/types';
+import type { Chat, Message, User } from '@telegraf/types';
 import type { Context, Telegraf } from 'telegraf';
 import type { MessageManager } from './messageManager';
 import type { TelegramService } from './service';
@@ -197,11 +197,11 @@ export class TelegramTestSuite implements TestSuite {
           last_name: 'User',
         } as User,
         message: {
-          message_id: undefined,
+          message_id: 12345,
           text: `@${this.bot.botInfo?.username}! Hello!`,
           date: Math.floor(Date.now() / 1000),
           chat,
-        } as any,
+        } as Message.TextMessage,
         telegram: this.bot.telegram,
       };
 
@@ -242,7 +242,9 @@ export class TelegramTestSuite implements TestSuite {
         text: `@${this.bot.botInfo?.username}!`,
       };
 
-      const result = await this.messageManager.processImage(mockMessage as any);
+      const result = await this.messageManager.processImage(
+        mockMessage as Message.PhotoMessage,
+      );
       if (!result?.description) {
         throw new Error(
           'Error processing Telegram image or description not found',

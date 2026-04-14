@@ -15,18 +15,25 @@ import {
 } from '@elizaos/core';
 import { type Context, Telegraf } from 'telegraf';
 import type {
+  Chat,
   ChatMemberAdministrator,
   ChatMemberOwner,
   User,
 } from 'telegraf/types';
 import { TELEGRAM_SERVICE_NAME } from './constants';
 import { MessageManager } from './messageManager';
-import { TelegramEventTypes, type TelegramWorldPayload } from './types';
+import {
+  TelegramEventTypes,
+  type TelegramEntityPayload,
+  type TelegramWorldPayload,
+} from './types';
 
 const CANONICAL_OWNER_SETTING_KEYS = [
   'ELIZA_ADMIN_ENTITY_ID',
   'MILADY_ADMIN_ENTITY_ID',
 ] as const;
+
+type MiddlewareNext = () => Promise<void>;
 
 function getCanonicalOwnerId(runtime: IAgentRuntime): UUID | null {
   for (const key of CANONICAL_OWNER_SETTING_KEYS) {
@@ -92,7 +99,7 @@ export class TelegramService extends Service {
   private bot: Telegraf<Context> | null;
   public messageManager: MessageManager | null;
   private options;
-  private knownChats: Map<string, any> = new Map();
+  private knownChats: Map<string, Chat> = new Map();
   private syncedEntityIds: Set<string> = new Set<string>();
 
   /**
@@ -286,14 +293,11 @@ export class TelegramService extends Service {
     }
 
     bot.start((ctx) => {
-      this.runtime.emitEvent(
-        TelegramEventTypes.SLASH_START as string,
-        {
-          ctx,
-          runtime: this.runtime,
-          source: 'telegram',
-        } as any,
-      );
+      this.runtime.emitEvent(TelegramEventTypes.SLASH_START, {
+        ctx,
+        runtime: this.runtime,
+        source: 'telegram',
+      });
     });
     bot.launch({
       dropPendingUpdates: true,
@@ -351,7 +355,7 @@ export class TelegramService extends Service {
    */
   private async authorizationMiddleware(
     ctx: Context,
-    next: Function,
+    next: MiddlewareNext,
   ): Promise<void> {
     if (!(await this.isGroupAuthorized(ctx))) {
       // Skip further processing if chat is not authorized
@@ -380,7 +384,7 @@ export class TelegramService extends Service {
    */
   private async chatAndEntityMiddleware(
     ctx: Context,
-    next: Function,
+    next: MiddlewareNext,
   ): Promise<void> {
     if (!ctx.chat) {
       return next();
@@ -606,35 +610,33 @@ export class TelegramService extends Service {
     chatId: string,
   ): Promise<void> {
     // Handle new chat member
-    if (ctx.message && 'new_chat_member' in ctx.message) {
-      const newMember = ctx.message.new_chat_member as any;
-      const telegramId = newMember.id.toString();
-      const entityId = createUniqueUuid(this.runtime, telegramId) as UUID;
+    if (ctx.message && 'new_chat_members' in ctx.message) {
+      for (const newMember of ctx.message.new_chat_members) {
+        const telegramId = newMember.id.toString();
+        const entityId = createUniqueUuid(this.runtime, telegramId) as UUID;
 
-      // Skip if we've already synced this entity
-      if (this.syncedEntityIds.has(telegramId)) {
-        return;
-      }
+        // Skip if we've already synced this entity
+        if (this.syncedEntityIds.has(telegramId)) {
+          continue;
+        }
 
-      // We call ensure connection here for this user.
-      await this.runtime.ensureConnection({
-        entityId,
-        roomId,
-        roomName: getTelegramChatDisplayName(ctx.chat, chatId),
-        userName: newMember.username,
-        userId: telegramId as UUID,
-        name: newMember.first_name || newMember.username || 'Unknown User',
-        source: 'telegram',
-        channelId: chatId,
-        type: ChannelType.GROUP,
-        worldId,
-      });
+        // We call ensure connection here for this user.
+        await this.runtime.ensureConnection({
+          entityId,
+          roomId,
+          roomName: getTelegramChatDisplayName(ctx.chat, chatId),
+          userName: newMember.username,
+          userId: telegramId as UUID,
+          name: newMember.first_name || newMember.username || 'Unknown User',
+          source: 'telegram',
+          channelId: chatId,
+          type: ChannelType.GROUP,
+          worldId,
+        });
 
-      this.syncedEntityIds.add(entityId);
+        this.syncedEntityIds.add(entityId);
 
-      this.runtime.emitEvent(
-        TelegramEventTypes.ENTITY_JOINED as string,
-        {
+        const entityJoinedPayload: TelegramEntityPayload = {
           runtime: this.runtime,
           entityId,
           worldId,
@@ -644,8 +646,12 @@ export class TelegramService extends Service {
             username: newMember.username,
             first_name: newMember.first_name,
           },
-        } as any,
-      );
+        };
+        this.runtime.emitEvent(
+          TelegramEventTypes.ENTITY_JOINED,
+          entityJoinedPayload,
+        );
+      }
     }
   }
 
@@ -659,7 +665,7 @@ export class TelegramService extends Service {
   private async syncLeftChatMember(ctx: Context): Promise<void> {
     // Handle left chat member
     if (ctx.message && 'left_chat_member' in ctx.message) {
-      const leftMember = ctx.message.left_chat_member as any;
+      const leftMember = ctx.message.left_chat_member;
       const telegramId = leftMember.id.toString();
       const entityId = createUniqueUuid(this.runtime, telegramId) as UUID;
 
@@ -861,9 +867,9 @@ export class TelegramService extends Service {
     // Use the new batch processing method for entities
     await this.batchProcessEntities(
       entities,
-      generalRoom.id!,
-      generalRoom.name || generalRoom.channelId!,
-      generalRoom.channelId!,
+      generalRoom.id,
+      generalRoom.name || generalRoom.channelId || chatId,
+      generalRoom.channelId || chatId,
       generalRoom.type,
       worldId,
     );
@@ -990,7 +996,7 @@ export class TelegramService extends Service {
    * @returns {Object} Object containing chatTitle and channelType
    * @private
    */
-  private getChatTypeInfo(chat: any): {
+  private getChatTypeInfo(chat: Chat): {
     chatTitle: string;
     channelType: ChannelType;
   } {
@@ -1015,8 +1021,9 @@ export class TelegramService extends Service {
         channelType = ChannelType.FEED;
         break;
       default:
-        chatTitle = 'Unknown Chat';
-        channelType = ChannelType.GROUP;
+        throw new Error(
+          `Unrecognized Telegram chat type: ${String(chat.type)}`,
+        );
     }
 
     return { chatTitle, channelType };
@@ -1030,7 +1037,7 @@ export class TelegramService extends Service {
    * @returns {Promise<Entity[]>} Array of standardized Entity objects
    * @private
    */
-  private async buildStandardizedEntities(chat: any): Promise<Entity[]> {
+  private async buildStandardizedEntities(chat: Chat): Promise<Entity[]> {
     const entities: Entity[] = [];
 
     try {

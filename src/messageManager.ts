@@ -61,6 +61,16 @@ export enum MediaType {
 
 const MAX_MESSAGE_LENGTH = 4096; // Telegram's max message length
 
+type PdfTextService = {
+  convertPdfToText(pdfBuffer: Buffer): Promise<string>;
+};
+
+type TelegramMediaSender = (
+  chatId: number | string,
+  media: string | { source: fs.ReadStream },
+  extra?: { caption?: string },
+) => Promise<unknown>;
+
 const getChannelType = (chat: Chat): ChannelType => {
   // Use a switch statement for clarity and exhaustive checks
   switch (chat.type) {
@@ -71,7 +81,7 @@ const getChannelType = (chat: Chat): ChannelType => {
     case 'channel':
       return ChannelType.GROUP;
     default:
-      throw new Error(`Unrecognized Telegram chat type: ${(chat as any).type}`);
+      throw new Error(`Unrecognized Telegram chat type: ${String(chat.type)}`);
   }
 };
 
@@ -244,7 +254,9 @@ export class MessageManager {
     documentUrl: string,
   ): Promise<DocumentProcessingResult> {
     try {
-      const pdfService = this.runtime.getService(ServiceType.PDF) as any;
+      const pdfService = this.runtime.getService(
+        ServiceType.PDF,
+      ) as PdfTextService | null;
       if (!pdfService) {
         logger.warn(
           { src: 'plugin:telegram', agentId: this.runtime.agentId },
@@ -589,7 +601,7 @@ export class MessageManager {
   ): Promise<void> {
     try {
       const isUrl = /^(http|https):\/\//.test(mediaPath);
-      const sendFunctionMap: Record<MediaType, Function> = {
+      const sendFunctionMap: Record<MediaType, TelegramMediaSender> = {
         [MediaType.PHOTO]: ctx.telegram.sendPhoto.bind(ctx.telegram),
         [MediaType.VIDEO]: ctx.telegram.sendVideo.bind(ctx.telegram),
         [MediaType.DOCUMENT]: ctx.telegram.sendDocument.bind(ctx.telegram),
@@ -810,7 +822,7 @@ export class MessageManager {
       // Create callback for handling responses
       const callback: HandlerCallback = async (
         content: Content,
-        _files?: any,
+        _actionName?: string,
       ) => {
         try {
           // If response is from reasoning do not send it.
@@ -1100,24 +1112,22 @@ export class MessageManager {
 
       // Emit both generic and platform-specific message sent events
       if (memories.length > 0) {
+        const firstMemory = memories[0];
         this.runtime.emitEvent(EventType.MESSAGE_SENT, {
           runtime: this.runtime,
-          message: memories[0],
+          message: firstMemory,
           source: 'telegram',
         });
-      }
 
-      // Also emit platform-specific event
-      this.runtime.emitEvent(
-        TelegramEventTypes.MESSAGE_SENT as string,
-        {
+        // Also emit platform-specific event
+        this.runtime.emitEvent(TelegramEventTypes.MESSAGE_SENT, {
           runtime: this.runtime,
           source: 'telegram',
           originalMessages: sentMessages,
           chatId,
-          message: memories[0],
-        } as any,
-      );
+          message: firstMemory,
+        });
+      }
 
       return sentMessages;
     } catch (error) {
