@@ -35,6 +35,13 @@ const CANONICAL_OWNER_SETTING_KEYS = [
 
 type MiddlewareNext = () => Promise<void>;
 
+type ActiveTelegramPoller = {
+  bot: Telegraf<Context>;
+  agentId: UUID;
+};
+
+const ACTIVE_TELEGRAM_POLLERS = new Map<string, ActiveTelegramPoller>();
+
 function getCanonicalOwnerId(runtime: IAgentRuntime): UUID | null {
   for (const key of CANONICAL_OWNER_SETTING_KEYS) {
     const value = runtime.getSetting(key);
@@ -101,6 +108,7 @@ export class TelegramService extends Service {
   private options;
   private knownChats: Map<string, Chat> = new Map();
   private syncedEntityIds: Set<string> = new Set<string>();
+  private readonly botToken: string | null;
 
   /**
    * Constructor for TelegramService class.
@@ -111,6 +119,7 @@ export class TelegramService extends Service {
     if (!runtime) {
       this.bot = null;
       this.messageManager = null;
+      this.botToken = null;
       return;
     }
     logger.debug(
@@ -120,6 +129,7 @@ export class TelegramService extends Service {
 
     // Check if Telegram bot token is available and valid
     const botToken = runtime.getSetting('TELEGRAM_BOT_TOKEN') as string;
+    this.botToken = botToken?.trim() || null;
     if (!botToken || botToken.trim() === '') {
       logger.warn(
         { src: 'plugin:telegram', agentId: runtime.agentId },
@@ -279,7 +289,17 @@ export class TelegramService extends Service {
    * @returns A Promise that resolves once the bot has stopped.
    */
   async stop(): Promise<void> {
-    this.bot?.stop();
+    const bot = this.bot;
+    if (!bot) {
+      return;
+    }
+    bot.stop('service-stop');
+    if (this.botToken) {
+      const active = ACTIVE_TELEGRAM_POLLERS.get(this.botToken);
+      if (active?.bot === bot) {
+        ACTIVE_TELEGRAM_POLLERS.delete(this.botToken);
+      }
+    }
   }
 
   /**
@@ -290,6 +310,36 @@ export class TelegramService extends Service {
     const bot = this.bot;
     if (!bot) {
       throw new Error('Telegram bot is not initialized');
+    }
+    const botToken = this.botToken;
+
+    if (botToken) {
+      const active = ACTIVE_TELEGRAM_POLLERS.get(botToken);
+      if (active && active.bot !== bot) {
+        logger.warn(
+          {
+            src: 'plugin:telegram',
+            agentId: this.runtime.agentId,
+            previousAgentId: active.agentId,
+          },
+          'Stopping existing Telegram poller before launching a new one',
+        );
+        try {
+          active.bot.stop('replaced-by-new-runtime');
+        } catch (error) {
+          logger.warn(
+            {
+              src: 'plugin:telegram',
+              agentId: this.runtime.agentId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'Failed to stop previous Telegram poller cleanly',
+          );
+        }
+        ACTIVE_TELEGRAM_POLLERS.delete(botToken);
+        // Give Telegram a brief moment to release long-poll ownership.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
     }
 
     bot.start((ctx) => {
@@ -303,10 +353,16 @@ export class TelegramService extends Service {
         slashStartPayload,
       );
     });
-    bot.launch({
+    await bot.launch({
       dropPendingUpdates: true,
       allowedUpdates: ['message', 'message_reaction'],
     });
+    if (botToken) {
+      ACTIVE_TELEGRAM_POLLERS.set(botToken, {
+        bot,
+        agentId: this.runtime.agentId,
+      });
+    }
 
     // Get bot info for identification purposes
     const botInfo = await bot.telegram.getMe();
